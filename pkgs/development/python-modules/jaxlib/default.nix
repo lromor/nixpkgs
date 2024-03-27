@@ -363,7 +363,7 @@ let
       ];
 
       sha256 = (if cudaSupport then {
-        x86_64-linux = "sha256-IEKoHjCOtKZKvU/DUUjbvXldORFJuyO1R3F6CZZDXxM=";
+        x86_64-linux = "sha256-h4zE+Z6z7odg7Avr54pgsjInBaHf+BqVQUi4SsV3Nqo=";
       } else {
         x86_64-linux = "sha256-IE4+Tk4llo85u3NjakvY04tPw4R1bidyecPpQ4gknR8=";
         aarch64-linux = "sha256-NehnpA4m+Fynvh0S6WKy/v9ab81487NE9ahvbS70wjY=";
