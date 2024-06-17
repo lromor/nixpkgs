@@ -2,6 +2,7 @@
 , cacert
 , lib
 , writeCBin
+, fetchFromGitHub
 }:
 
 args@{
@@ -107,6 +108,20 @@ let
       }
     }
   '';
+
+  registry = stdenv.mkDerivation {
+    name = "bazel-central-registry";
+    dontBuild = true;
+    src = fetchFromGitHub {
+      owner = "bazelbuild";
+      repo = "bazel-central-registry";
+      rev = "1c729c2775715fd98f0f948a512eb173213250da";
+      hash = "sha256-1iaDDM8/v8KCOUjPgLUtZVta7rMzwlIK//cCoLUrb/s=";
+    };
+    installPhase = ''
+       cp -r $src $out
+    '';
+  };
 in
 stdenv.mkDerivation (fBuildAttrs // {
 
@@ -115,9 +130,10 @@ stdenv.mkDerivation (fBuildAttrs // {
 
     impureEnvVars = lib.fetchers.proxyImpureEnvVars ++ fFetchAttrs.impureEnvVars or [];
 
-    nativeBuildInputs = fFetchAttrs.nativeBuildInputs or [] ++ [ bazel ];
+    nativeBuildInputs = [ registry ] ++ (fFetchAttrs.nativeBuildInputs or [] ++ [ bazel ]);
 
     preHook = fFetchAttrs.preHook or "" + ''
+      export registry=${registry}
       export bazelOut="$(echo ''${NIX_BUILD_TOP}/output | sed -e 's,//,/,g')"
       export bazelUserRoot="$(echo ''${NIX_BUILD_TOP}/tmp | sed -e 's,//,/,g')"
       export HOME="$NIX_BUILD_TOP"
@@ -131,7 +147,6 @@ stdenv.mkDerivation (fBuildAttrs // {
 
     buildPhase = fFetchAttrs.buildPhase or ''
       runHook preBuild
-
       ${
         bazelCmd {
           cmd = if fetchConfigured then "build --nobuild" else "fetch";
@@ -139,7 +154,9 @@ stdenv.mkDerivation (fBuildAttrs // {
             # We disable multithreading for the fetching phase since it can lead to timeouts with many dependencies/threads:
             # https://github.com/bazelbuild/bazel/issues/6502
             "--loading_phase_threads=1"
+            "--repository_cache=$bazelOut"
             "$bazelFetchFlags"
+            "--registry=file://$registry"
           ] ++ (if fetchConfigured then ["--jobs" "$NIX_BUILD_CORES"] else []);
           targets = fFetchAttrs.bazelTargets ++ fFetchAttrs.bazelTestTargets;
         }
@@ -201,9 +218,10 @@ stdenv.mkDerivation (fBuildAttrs // {
     outputHash = fetchAttrs.sha256;
   });
 
-  nativeBuildInputs = fBuildAttrs.nativeBuildInputs or [] ++ [ (bazel.override { enableNixHacks = true; }) ];
+  nativeBuildInputs = [ registry ] ++ (fBuildAttrs.nativeBuildInputs or [] ++ [ (bazel.override { enableNixHacks = true; }) ]);
 
   preHook = fBuildAttrs.preHook or "" + ''
+    export registry=${registry}
     export bazelOut="$NIX_BUILD_TOP/output"
     export bazelUserRoot="$NIX_BUILD_TOP/tmp"
     export HOME="$NIX_BUILD_TOP"
@@ -256,26 +274,25 @@ stdenv.mkDerivation (fBuildAttrs // {
         host_linkopts+=( "--host_linkopt=-Wl,$flag" )
       done
     fi
-
     ${
       bazelCmd {
         cmd = "test";
         additionalFlags =
-          ["--test_output=errors"] ++ fBuildAttrs.bazelTestFlags ++ ["--jobs" "$NIX_BUILD_CORES"];
+          ["--test_output=errors"] ++ fBuildAttrs.bazelTestFlags ++ ["--jobs" "$NIX_BUILD_CORES" "--repository_cache" "$bazelOut" "--registry" "file://$registry"];
         targets = fBuildAttrs.bazelTestTargets;
       }
     }
     ${
       bazelCmd {
         cmd = "build";
-        additionalFlags = fBuildAttrs.bazelBuildFlags ++ ["--jobs" "$NIX_BUILD_CORES"];
+        additionalFlags = fBuildAttrs.bazelBuildFlags ++ ["--jobs" "$NIX_BUILD_CORES" "--repository_cache" "$bazelOut" "--registry" "file://$registry"];
         targets = fBuildAttrs.bazelTargets;
       }
     }
     ${
       bazelCmd {
         cmd = "run";
-        additionalFlags = fBuildAttrs.bazelRunFlags ++ [ "--jobs" "$NIX_BUILD_CORES" ];
+        additionalFlags = fBuildAttrs.bazelRunFlags ++ [ "--jobs" "$NIX_BUILD_CORES"  "--repository_cache" "$bazelOut" "--registry" "file://$registry"];
         # Bazel run only accepts a single target, but `bazelCmd` expects `targets` to be a list.
         targets = lib.optionals (fBuildAttrs.bazelRunTarget != null) [ fBuildAttrs.bazelRunTarget ];
         targetRunFlags = fBuildAttrs.runTargetFlags;
