@@ -39,7 +39,7 @@ buildBazelPackage rec {
     hash =
       {
         aarch64-linux = "sha256-F4fYZfdCmDzJRR+z1rCLsculP9y9B8H8WHNQbFZEv+s=";
-        x86_64-linux = "sha256-rjlquK0WcB7Te2uUKKVOrL7+6PtcWQImUWTVafIsbHY=";
+        x86_64-linux = "sha256-TYeS1bax7sA0hJLXqtE8Q5FLnIylcWPZynVE2LhvZKc=";
       }
       .${system} or (throw "No hash for system: ${system}");
   };
